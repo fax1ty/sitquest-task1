@@ -7,13 +7,12 @@ import path from 'path';
 const file = path.join(path.resolve(path.dirname('')), 'db.json');
 const adapter = new JSONFile<AppDB>(file);
 interface AppDB {
-    nextUpdate: number;
     lastID: number;
 }
 const db = new Low<AppDB>(adapter);
 db.read()
     .then(() => {
-        db.data ||= { nextUpdate: -1, lastID: -1 }
+        db.data ||= { lastID: -1 }
     });
 
 import dotenv from 'dotenv';
@@ -39,7 +38,8 @@ async function getLastDocs() {
                 .split('\t').join('')
                 .replace(/\s{2,}/g, '').trim(),
             description: cheerio.load(el)('p').text(),
-            attachments: cheerio.load(el)('div > a').toArray().map(el => [document(el).text(), el.attribs.href])
+            attachments: cheerio.load(el)('div > a').toArray().map(el => [document(el).text(), el.attribs.href]),
+            publishedAt: cheerio.load(el)('p').parent().contents().filter(function () { return this.nodeType == 3; }).text().split('Опубликовано: ')[1]
         }
     });
     return data;
@@ -49,6 +49,7 @@ function magicInterval(cb: () => any, interval: number) {
     cb();
     setInterval(cb, interval);
 }
+
 bot.launch()
     .then(async () => {
         console.log('Bot is working from now!');
@@ -63,18 +64,19 @@ bot.launch()
             }
             let newDocs = docs.filter(doc => doc.id > db.data.lastID && (doc.title.includes('Уведомление') || doc.title.includes('Постановление')));
             newDocs.forEach(async doc => {
-                await bot.telegram.sendMessage(CHAT_ID, `[${doc.title}](${ENDPOINT + doc.link})\n\n${doc.description}`, { parse_mode: 'Markdown', disable_web_page_preview: true });
+                await bot.telegram.sendMessage(CHAT_ID, `[${doc.title}](${ENDPOINT + doc.link})\n\n${doc.description}\n\nОпубликовано: ${doc.publishedAt}`, { parse_mode: 'Markdown', disable_web_page_preview: true });
                 doc.attachments.forEach(async attach => {
                     let stream: Readable = (await axios.get(ENDPOINT + attach[1], { responseType: 'stream' })).data;
                     await bot.telegram.sendDocument(CHAT_ID, { filename: attach[0], source: stream });
                 });
                 db.data.lastID = doc.id;
                 await db.write();
-                
+
                 console.log(`Sent message to ${CHAT_ID} with doc ${doc.id}`);
             });
         }, UPDATE_INTERVAL * 1000 * 60);
     });
+
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
