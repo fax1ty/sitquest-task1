@@ -38,7 +38,11 @@ async function getLastDocs() {
                 .split('\t').join('')
                 .replace(/\s{2,}/g, '').trim(),
             description: cheerio.load(el)('p').text(),
-            attachments: cheerio.load(el)('div > a').toArray().map(el => [document(el).text(), el.attribs.href]),
+            attachments: cheerio.load(el)('div > a').toArray().map((el, i) => [
+                document(el).text(), // filename
+                el.attribs.href, // url
+                Array.from(document(el.parent).contents().filter(function () { return this.nodeType == 3; }).text().matchAll(/(\w*?),.*?Б/gm))[i][1] // extension
+            ]),
             publishedAt: cheerio.load(el)('p').parent().contents().filter(function () { return this.nodeType == 3; }).text().split('Опубликовано: ')[1]
         }
     });
@@ -67,7 +71,7 @@ bot.launch()
                 await bot.telegram.sendMessage(CHAT_ID, `[${doc.title}](${ENDPOINT + doc.link})\n\n${doc.description}\n\nОпубликовано: ${doc.publishedAt}`, { parse_mode: 'Markdown', disable_web_page_preview: true });
                 doc.attachments.forEach(async attach => {
                     let stream: Readable = (await axios.get(ENDPOINT + attach[1], { responseType: 'stream' })).data;
-                    await bot.telegram.sendDocument(CHAT_ID, { filename: attach[0], source: stream });
+                    await bot.telegram.sendDocument(CHAT_ID, { filename: attach[0] + '.' + attach[2], source: stream });
                 });
                 db.data.lastID = doc.id;
                 await db.write();
