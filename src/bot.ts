@@ -67,16 +67,18 @@ bot.launch()
                 return;
             }
             let newDocs = docs.filter(doc => doc.id > db.data.lastID && (doc.title.includes('Уведомление') || doc.title.includes('Постановление')));
-            newDocs.forEach(async doc => {
-                await bot.telegram.sendMessage(CHAT_ID, `[${doc.title}](${ENDPOINT + doc.link})\n\n${doc.description}\n\nОпубликовано: ${doc.publishedAt}`, { parse_mode: 'Markdown', disable_web_page_preview: true });
-                doc.attachments.forEach(async attach => {
-                    let stream: Readable = (await axios.get(ENDPOINT + attach[1], { responseType: 'stream' })).data;
-                    await bot.telegram.sendDocument(CHAT_ID, { filename: attach[0] + '.' + attach[2], source: stream });
-                });
-                db.data.lastID = doc.id;
-                await db.write();
+            newDocs.forEach(doc => {
+                setTimeout(async () => {
+                    await bot.telegram.sendMessage(CHAT_ID, `[${doc.title}](${ENDPOINT + doc.link})\n\n${doc.description}\n\nОпубликовано: ${doc.publishedAt}`, { parse_mode: 'Markdown', disable_web_page_preview: true });
+                    doc.attachments.forEach(async attach => {
+                        let stream: Readable = (await axios.get(ENDPOINT + attach[1], { responseType: 'stream' })).data;
+                        await bot.telegram.sendDocument(CHAT_ID, { filename: attach[0] + '.' + attach[2], source: stream });
+                    });
+                    db.data.lastID = doc.id;
+                    await db.write();
 
-                console.log(`Sent message to ${CHAT_ID} with doc ${doc.id}`);
+                    console.log(`Sent message to ${CHAT_ID} with doc ${doc.id}`);
+                }, 5 * 1000);
             });
         }, UPDATE_INTERVAL * 1000 * 60);
     });
